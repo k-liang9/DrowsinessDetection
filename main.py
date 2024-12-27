@@ -2,6 +2,7 @@ import cv2
 import dlib
 from scipy.spatial import distance
 import time
+import pyttsx3
 
 LEFT_EYE_BEGIN = 36
 LEFT_EYE_END = 42
@@ -20,7 +21,9 @@ MOUTH_THRESHOLD = 1
 last_yawn = time.time()
 is_yawning = False
 
-def capture_landmark(arr, begin, end):
+engine = pyttsx3.init()
+
+def capture_landmark(face_landmarks, arr, begin, end):
     for i in range(begin, end):
         arr.append((face_landmarks.part(i).x, face_landmarks.part(i).y))
 
@@ -38,7 +41,10 @@ def track_EAR():
         if eyes_heavy:
             eyes_end = time.time()
             if eyes_end - eyes_start > 1.5:
-                print("ALERT: drowsiness alert: eyes drooping")
+                print('drowsy')
+                engine.say('Drowsiness alert: eyes drooping')
+                engine.runAndWait()
+                engine.stop()
         else:
             eyes_heavy = True
             eyes_start = time.time()
@@ -60,7 +66,10 @@ def track_MAR():
             is_yawning = True
             cur_yawn = time.time()
             if cur_yawn - last_yawn < 120:
-                print("ALERT: drowsiness alert: frequent yawns")
+                print('drowsy')
+                engine.say('Drowsiness alert: frequent yawns')
+                engine.runAndWait()
+                engine.stop()
             last_yawn = cur_yawn
     else:
         is_yawning = False
@@ -81,16 +90,16 @@ while True:
     for face in faces:
         face_landmarks = dlib_face_landmark(gray, face)
 
-        # #eye aspect ratio
-        # capture_landmark(left_eye, LEFT_EYE_BEGIN, LEFT_EYE_END)
-        # capture_landmark(right_eye, RIGHT_EYE_BEGIN, RIGHT_EYE_END)
-        # track_EAR()
+        #eye tracking
+        capture_landmark(face_landmarks, left_eye, LEFT_EYE_BEGIN, LEFT_EYE_END)
+        capture_landmark(face_landmarks, right_eye, RIGHT_EYE_BEGIN, RIGHT_EYE_END)
+        track_EAR()
 
         #yawn count
-        capture_landmark(mouth, MOUTH_BEGIN, MOUTH_END)
+        capture_landmark(face_landmarks, mouth, MOUTH_BEGIN, MOUTH_END)
         track_MAR()
 
-        # #outlining parts
+        #outlining parts
         # for n in range(0, 68):
         #     x = face_landmarks.part(n).x
         #     y = face_landmarks.part(n).y
@@ -98,7 +107,7 @@ while True:
         #     cv2.putText(image, str(n), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 1)
         # for n in range(0, 6):
         #     next = n + 1
-        #     if next == 6:
+        #     if next == 5:
         #         next = 0
         #     cv2.line(image, left_eye[n], left_eye[next], (255, 255, 0), 1)
         #     cv2.line(image, right_eye[n], right_eye[next], (255, 255, 0), 1)
