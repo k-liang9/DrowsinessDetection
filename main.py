@@ -3,6 +3,7 @@ import dlib
 from scipy.spatial import distance
 import time
 import pyttsx3
+import numpy as np
 
 LEFT_EYE_BEGIN = 36
 LEFT_EYE_END = 42
@@ -11,7 +12,7 @@ RIGHT_EYE_END = 48
 MOUTH_BEGIN = 60
 MOUTH_END = 68
 
-EYE_THRESHOLD = 0.25 #can be optimized by ml
+EYE_THRESHOLD = 0.25
 EYE_DROOP_INTERVAL = 1.5
 eyes_heavy = False
 eyes_start = 0
@@ -22,6 +23,25 @@ last_yawn = time.time()
 is_yawning = False
 
 engine = pyttsx3.init()
+
+def warp_eyes(face_landmarks, image):
+    right_eye_edge = [face_landmarks.part(36).x, face_landmarks.part(36).y]
+    left_eye_edge = [face_landmarks.part(45).x, face_landmarks.part(45).y]
+    right_jaw = [face_landmarks.part(5).x, face_landmarks.part(5).y]
+    left_jaw = [face_landmarks.part(11).x, face_landmarks.part(11).y]
+    src_points = np.float32([right_eye_edge, left_eye_edge, right_jaw, left_jaw])
+    width = distance.euclidean(src_points[1], src_points[0])
+    height = distance.euclidean(src_points[2], src_points[3])
+
+    dst_points = np.float32([right_eye_edge,
+                             [right_eye_edge[0] + width, right_eye_edge[1]],
+                             [right_eye_edge[0], right_eye_edge[1] + height],
+                             [right_eye_edge[0] + width, right_eye_edge[1] + height]])
+
+    perspective_matrix = cv2.getPerspectiveTransform(src_points, dst_points)
+    perspective_transformed_image = cv2.warpPerspective(image, perspective_matrix,
+                                                        (image.shape[1], image.shape[0]))
+    return cv2.cvtColor(perspective_transformed_image, cv2.COLOR_BGR2GRAY)
 
 def capture_landmark(face_landmarks, arr, begin, end):
     for i in range(begin, end):
@@ -91,15 +111,19 @@ while True:
         face_landmarks = dlib_face_landmark(gray, face)
 
         #eye tracking
-        capture_landmark(face_landmarks, left_eye, LEFT_EYE_BEGIN, LEFT_EYE_END)
-        capture_landmark(face_landmarks, right_eye, RIGHT_EYE_BEGIN, RIGHT_EYE_END)
-        track_EAR()
+        warped_gray_image = warp_eyes(face_landmarks, image)
+        warped_faces = hog_face_detector(warped_gray_image)
+        for warped_face in warped_faces:
+            warped_face_landmarks = dlib_face_landmark(warped_gray_image, warped_face)
+            capture_landmark(warped_face_landmarks, left_eye, LEFT_EYE_BEGIN, LEFT_EYE_END)
+            capture_landmark(warped_face_landmarks, right_eye, RIGHT_EYE_BEGIN, RIGHT_EYE_END)
+            track_EAR()
 
         #yawn count
         capture_landmark(face_landmarks, mouth, MOUTH_BEGIN, MOUTH_END)
         track_MAR()
 
-        #outlining parts
+        # # outlining parts
         # for n in range(0, 68):
         #     x = face_landmarks.part(n).x
         #     y = face_landmarks.part(n).y
@@ -112,7 +136,8 @@ while True:
         #     cv2.line(image, left_eye[n], left_eye[next], (255, 255, 0), 1)
         #     cv2.line(image, right_eye[n], right_eye[next], (255, 255, 0), 1)
 
-    cv2.imshow("Output", image)
+    # cv2.imshow("Output", image)
+    # cv2.imshow("warped", warped_gray_image)
 
     k = cv2.waitKey(5) & 0xFF
     if k == 27:
